@@ -1,4 +1,4 @@
-from pandas import *
+import pandasql
 from ggplot import *
 
 def plot_weather_data(turnstile_weather):
@@ -29,25 +29,24 @@ def plot_weather_data(turnstile_weather):
     However, due to the limitation of our Amazon EC2 server, we are giving you a random
     subset, about 1/3 of the actual data in the turnstile_weather dataframe.
     '''
-    df = turnstile_weather
+    df = turnstile_weather[['DATEn', 'ENTRIESn_hourly']]
 
-    # gets ridership by date
-    entriesByDayOfMonth = df[['DATEn', 'ENTRIESn_hourly']] \
-        .groupby('DATEn', as_index=False).sum()
+    q = """
+        SELECT cast(strftime('%w', DATEn) AS integer) AS weekday,
+               sum(ENTRIESn_hourly)/count(*) AS hourlyentries
+        FROM df
+        GROUP BY cast(strftime('%w', DATEn) AS integer)
+        """
 
-    # gets day of week
-    entriesByDayOfMonth['Day'] = [datetime.strptime(x, '%Y-%m-%d') \
-                                      .strftime('%w') \
-                                  for x in entriesByDayOfMonth['DATEn']]
-    # gets ridership by day of week
-    entriesByDay = entriesByDayOfMonth[['Day', 'ENTRIESn_hourly']]\
-        .groupby('Day', as_index=False).sum()
+    #Execute SQL command against the pandas frame
+    rainy_days = pandasql.sqldf(q.lower(), locals())
 
 
-    # plots the ridership by day of week
-    plot = ggplot(entriesByDay, aes('Day', 'ENTRIESn_hourly')) \
-         + geom_line(colour='red') \
-         + ggtitle('NYC Subway ridership by day of week') + xlab('Day') + ylab('Entries')
-
-    return plot
-
+    print ggplot(rainy_days, aes('weekday', 'hourlyentries')) + \
+            geom_bar(fill = '#007ee5', stat='bar') + \
+            scale_x_continuous(name="Weekday",
+                                breaks=[0, 1, 2, 3, 4, 5, 6],
+                                labels=["Sunday", "Monday", "Tuesday", "Wednesday",
+                                        "Thursday", "Friday", "Saturday"]) + \
+            ggtitle("Average ENTRIESn_hourly by Weekday") + \
+            ylab("ENTRIESn_hourly")
